@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pokemon GO Type Network</title>
+  <link rel="stylesheet" href="./css/styles.css">
+  <script src="./js/data/type-chart.js" defer></script>
+  <script src="./js/services/type-data-service.js" defer></script>
+  <script src="./js/app.js" defer></script>
+</head>
+<body>
+  <canvas id="network" aria-label="Pokemon GO type network visualization"></canvas>
+
+  <div class="chrome" aria-hidden="false">
+    <section class="panel header" aria-label="Overview">
+      <p class="eyebrow">Pokemon GO Type Network</p>
+      <h1>Cosmic effectiveness map</h1>
+      <p class="subhead">
+        Hover a type to inspect incoming pressure, click once to lock it as the defender, then click a second type to fuse a dual-type center node.
+      </p>
+    </section>
+
+    <aside class="panel legend" aria-label="Legend">
+      <h2>Legend</h2>
+      <p>Curved links show outer-ring attacks. Center shots appear only for dual defenders. Arrowheads always point into the defending type.</p>
+
+      <div class="legend-list">
+        <div class="legend-item">
+          <div class="legend-line rapid"></div>
+          <div class="legend-copy">
+            <strong>x2.56 Double Weakness</strong>
+            <span>Extremely fast flash pulse. Highest incoming pressure.</span>
+          </div>
+        </div>
+        <div class="legend-item">
+          <div class="legend-line fast"></div>
+          <div class="legend-copy">
+            <strong>x1.60 Super Effective</strong>
+            <span>Fast pulse. Strong attacker remains fully bright.</span>
+          </div>
+        </div>
+        <div class="legend-item">
+          <div class="legend-line resist"></div>
+          <div class="legend-copy">
+            <strong>x0.625 Resistance</strong>
+            <span>Slow breathing pulse. Defender naturally shrugs it off.</span>
+          </div>
+        </div>
+        <div class="legend-item">
+          <div class="legend-line immune"></div>
+          <div class="legend-copy">
+            <strong>x0.39 Double Resistance / Immune</strong>
+            <span>Very slow fade. Neutral nodes dim to 25% opacity.</span>
+          </div>
+        </div>
+        <div class="legend-item">
+          <div class="legend-line triple"></div>
+          <div class="legend-copy">
+            <strong>x0.24 Triple Resistance</strong>
+            <span>Glacial pulse. Appears only on extreme dual-type stacking.</span>
+          </div>
+        </div>
+      </div>
+
+      <h3>Controls</h3>
+      <div class="control-notes">
+        <span><i class="dot"></i>Hover or tap any node to focus a single defender.</span>
+        <span><i class="dot"></i>Click a second node to synthesize a dual-type center defender.</span>
+        <span><i class="dot"></i>Use Reset to clear selections and restore the full outer web.</span>
+      </div>
+    </aside>
+
+    <div id="status" class="panel status" role="status" aria-live="polite">
+      Idle web: every type stays fully bright while the full attack lattice glows in the background.
+    </div>
+
+    <button id="resetButton" class="reset" type="button" aria-label="Reset focus and selections" disabled>
+      <span class="reset-mark">X</span>
+      Reset network
+    </button>
+  </div>
+</body>
+</html>

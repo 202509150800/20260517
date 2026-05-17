@@ -1,0 +1,1425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pokemon GO Type Network</title>
+  <style>
+    :root {
+      --bg: #0a0a0a;
+      --panel: rgba(12, 14, 20, 0.68);
+      --panel-border: rgba(255, 255, 255, 0.1);
+      --text: #f5f7fb;
+      --muted: rgba(245, 247, 251, 0.68);
+      --accent: #8ee7ff;
+      --shadow: rgba(0, 0, 0, 0.55);
+      --fast: #ff6c73;
+      --rapid: #ff3d6c;
+      --resist: #63c8ff;
+      --immune: #f3f7ff;
+      --triple: #beeaff;
+      --neutral: rgba(255, 255, 255, 0.2);
+      --button-bg: rgba(14, 17, 24, 0.84);
+      --button-border: rgba(142, 231, 255, 0.24);
+      --button-hover: rgba(32, 40, 54, 0.9);
+      color-scheme: dark;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 50% 50%, rgba(36, 51, 88, 0.22), transparent 32%),
+        radial-gradient(circle at 15% 20%, rgba(44, 123, 255, 0.12), transparent 24%),
+        radial-gradient(circle at 85% 20%, rgba(255, 75, 124, 0.08), transparent 18%),
+        linear-gradient(180deg, #040405 0%, var(--bg) 100%);
+      color: var(--text);
+      font-family: "Segoe UI Variable Display", "Aptos Display", "Trebuchet MS", sans-serif;
+    }
+
+    body {
+      position: relative;
+    }
+
+    canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+      touch-action: none;
+      background: transparent;
+    }
+
+    .chrome {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+
+    .panel {
+      pointer-events: auto;
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      backdrop-filter: blur(18px) saturate(125%);
+      -webkit-backdrop-filter: blur(18px) saturate(125%);
+      box-shadow:
+        0 24px 60px var(--shadow),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    }
+
+    .header {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      max-width: min(34rem, calc(100vw - 40px));
+      padding: 1rem 1.15rem 1rem 1.15rem;
+      border-radius: 22px;
+      animation: panel-rise 900ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    }
+
+    .eyebrow {
+      margin: 0 0 0.35rem;
+      font-size: 0.74rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: rgba(142, 231, 255, 0.9);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(1.5rem, 2vw + 0.9rem, 2.5rem);
+      line-height: 1.05;
+      letter-spacing: 0.01em;
+      text-transform: uppercase;
+      font-weight: 760;
+    }
+
+    .subhead {
+      margin: 0.65rem 0 0;
+      font-size: clamp(0.92rem, 0.4vw + 0.8rem, 1.02rem);
+      line-height: 1.45;
+      color: var(--muted);
+      max-width: 36rem;
+    }
+
+    .legend {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      width: min(340px, calc(100vw - 40px));
+      max-height: calc(100vh - 40px);
+      overflow: auto;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(142, 231, 255, 0.35) transparent;
+      padding: 1rem 1.05rem 1rem;
+      border-radius: 24px;
+      animation: panel-rise 1000ms 80ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    }
+
+    .legend::-webkit-scrollbar {
+      width: 10px;
+    }
+
+    .legend::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .legend::-webkit-scrollbar-thumb {
+      border-radius: 999px;
+      background: rgba(142, 231, 255, 0.24);
+      border: 2px solid transparent;
+      background-clip: padding-box;
+    }
+
+    .legend h2,
+    .legend h3 {
+      margin: 0;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      font-size: 0.8rem;
+      color: rgba(255, 255, 255, 0.72);
+    }
+
+    .legend h3 {
+      margin-top: 1rem;
+    }
+
+    .legend p {
+      margin: 0.45rem 0 0.9rem;
+      font-size: 0.92rem;
+      line-height: 1.45;
+      color: var(--muted);
+    }
+
+    .legend-list {
+      display: grid;
+      gap: 0.62rem;
+    }
+
+    .legend-item {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 0.8rem;
+      align-items: center;
+      padding: 0.58rem 0.65rem;
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .legend-line {
+      position: relative;
+      width: 68px;
+      height: 14px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    .legend-line::before {
+      content: "";
+      position: absolute;
+      inset: 5px 12px 5px 0;
+      border-radius: 999px;
+      background: linear-gradient(90deg, rgba(255, 255, 255, 0.3), currentColor);
+      box-shadow: 0 0 16px color-mix(in srgb, currentColor 65%, transparent);
+    }
+
+    .legend-line::after {
+      content: "";
+      position: absolute;
+      top: 3px;
+      right: 0;
+      width: 0;
+      height: 0;
+      border-top: 4px solid transparent;
+      border-bottom: 4px solid transparent;
+      border-left: 8px solid currentColor;
+      filter: drop-shadow(0 0 6px currentColor);
+    }
+
+    .legend-line.rapid {
+      color: var(--rapid);
+    }
+
+    .legend-line.fast {
+      color: var(--fast);
+    }
+
+    .legend-line.resist {
+      color: var(--resist);
+    }
+
+    .legend-line.immune {
+      color: var(--immune);
+    }
+
+    .legend-line.triple {
+      color: var(--triple);
+    }
+
+    .legend-copy strong {
+      display: block;
+      font-size: 0.92rem;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+    }
+
+    .legend-copy span {
+      display: block;
+      margin-top: 0.15rem;
+      font-size: 0.8rem;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+
+    .control-notes {
+      display: grid;
+      gap: 0.45rem;
+      margin-top: 0.6rem;
+      font-size: 0.84rem;
+      color: var(--muted);
+    }
+
+    .control-notes span {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.55rem;
+    }
+
+    .dot {
+      width: 0.55rem;
+      height: 0.55rem;
+      border-radius: 50%;
+      background: rgba(142, 231, 255, 0.85);
+      box-shadow: 0 0 12px rgba(142, 231, 255, 0.6);
+      flex: 0 0 auto;
+    }
+
+    .status {
+      position: absolute;
+      left: 20px;
+      bottom: 20px;
+      max-width: min(460px, calc(100vw - 140px));
+      padding: 0.85rem 1rem;
+      border-radius: 999px;
+      font-size: 0.9rem;
+      line-height: 1.35;
+      color: rgba(255, 255, 255, 0.9);
+      letter-spacing: 0.01em;
+      animation: panel-rise 1050ms 120ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    }
+
+    .reset {
+      position: absolute;
+      right: 20px;
+      bottom: 20px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      min-width: 144px;
+      padding: 0.9rem 1.15rem;
+      border-radius: 999px;
+      border: 1px solid var(--button-border);
+      background: var(--button-bg);
+      color: var(--text);
+      font: 700 0.88rem/1 "Segoe UI Variable Display", "Aptos", sans-serif;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition:
+        transform 180ms ease,
+        background 180ms ease,
+        border-color 180ms ease,
+        box-shadow 180ms ease,
+        opacity 180ms ease;
+      box-shadow:
+        0 12px 32px rgba(0, 0, 0, 0.45),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08);
+      animation: panel-rise 1100ms 160ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+      pointer-events: auto;
+    }
+
+    .reset:hover:not(:disabled) {
+      transform: translateY(-2px);
+      background: var(--button-hover);
+      border-color: rgba(142, 231, 255, 0.42);
+      box-shadow:
+        0 16px 36px rgba(0, 0, 0, 0.52),
+        0 0 22px rgba(142, 231, 255, 0.18);
+    }
+
+    .reset:active:not(:disabled) {
+      transform: translateY(0);
+    }
+
+    .reset:disabled {
+      cursor: not-allowed;
+      opacity: 0.42;
+    }
+
+    .reset-mark {
+      display: inline-flex;
+      width: 1.25rem;
+      height: 1.25rem;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      font-size: 0.82rem;
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    @keyframes panel-rise {
+      from {
+        opacity: 0;
+        transform: translateY(14px) scale(0.985);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    @media (max-width: 900px) and (orientation: portrait) {
+      .header {
+        max-width: min(30rem, calc(100vw - 32px));
+        top: 16px;
+        left: 16px;
+      }
+
+      .legend {
+        top: auto;
+        right: 16px;
+        left: 16px;
+        bottom: 88px;
+        width: auto;
+      }
+
+      .status {
+        left: 16px;
+        right: 16px;
+        bottom: 16px;
+        max-width: none;
+        border-radius: 24px;
+      }
+
+      .reset {
+        right: 16px;
+        bottom: calc(16px + env(safe-area-inset-bottom));
+      }
+    }
+
+    @media (max-height: 760px) and (orientation: landscape) {
+      .header {
+        top: 14px;
+        left: 14px;
+        max-width: min(25rem, calc(100vw - 332px));
+        padding: 0.82rem 0.95rem;
+      }
+
+      .subhead {
+        font-size: 0.88rem;
+      }
+
+      .legend {
+        top: 14px;
+        right: 14px;
+        width: min(290px, calc(42vw - 14px));
+        max-height: calc(100vh - 96px);
+        padding: 0.85rem 0.95rem;
+      }
+
+      .legend p,
+      .control-notes,
+      .legend-copy span {
+        font-size: 0.78rem;
+      }
+
+      .legend-item {
+        padding: 0.48rem 0.56rem;
+      }
+
+      .status {
+        left: 14px;
+        bottom: 14px;
+        max-width: min(370px, calc(100vw - 204px));
+        padding: 0.74rem 0.9rem;
+        font-size: 0.84rem;
+      }
+
+      .reset {
+        right: 14px;
+        bottom: 14px;
+        min-width: 0;
+        padding: 0.78rem 0.98rem;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .header,
+      .legend,
+      .status,
+      .reset {
+        left: 12px;
+        right: 12px;
+      }
+
+      .header {
+        top: 12px;
+        padding: 0.85rem 0.95rem;
+      }
+
+      .legend {
+        bottom: 94px;
+        padding: 0.85rem 0.95rem;
+      }
+
+      .status {
+        bottom: 12px;
+        padding: 0.8rem 0.95rem;
+        max-width: none;
+      }
+
+      .reset {
+        width: auto;
+        min-width: 0;
+        justify-content: center;
+        bottom: 12px;
+        transform: translateY(-84px);
+      }
+
+      .legend-list {
+        gap: 0.5rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="network" aria-label="Pokemon GO type network visualization"></canvas>
+
+  <div class="chrome" aria-hidden="false">
+    <section class="panel header" aria-label="Overview">
+      <p class="eyebrow">Pokemon GO Type Network</p>
+      <h1>Cosmic effectiveness map</h1>
+      <p class="subhead">
+        Hover a type to inspect incoming pressure, click once to lock it as the defender, then click a second type to fuse a dual-type center node.
+      </p>
+    </section>
+
+    <aside class="panel legend" aria-label="Legend">
+      <h2>Legend</h2>
+      <p>Curved links show outer-ring attacks. Center shots appear only for dual defenders. Arrowheads always point into the defending type.</p>
+
+      <div class="legend-list">
+        <div class="legend-item">
+          <div class="legend-line rapid"></div>
+          <div class="legend-copy">
+            <strong>x2.56 Double Weakness</strong>
+            <span>Extremely fast flash pulse. Highest incoming pressure.</span>
+          </div>
+        </div>
+        <div class="legend-item">
+          <div class="legend-line fast"></div>
+          <div class="legend-copy">
+            <strong>x1.60 Super Effective</strong>
+            <span>Fast pulse. Strong attacker remains fully bright.</span>
+          </div>
+        </div>
+        <div class="legend-item">
+          <div class="legend-line resist"></div>
+          <div class="legend-copy">
+            <strong>x0.625 Resistance</strong>
+            <span>Slow breathing pulse. Defender naturally shrugs it off.</span>
+          </div>
+        </div>
+        <div class="legend-item">
+          <div class="legend-line immune"></div>
+          <div class="legend-copy">
+            <strong>x0.39 Double Resistance / Immune</strong>
+            <span>Very slow fade. Neutral nodes dim to 25% opacity.</span>
+          </div>
+        </div>
+        <div class="legend-item">
+          <div class="legend-line triple"></div>
+          <div class="legend-copy">
+            <strong>x0.24 Triple Resistance</strong>
+            <span>Glacial pulse. Appears only on extreme dual-type stacking.</span>
+          </div>
+        </div>
+      </div>
+
+      <h3>Controls</h3>
+      <div class="control-notes">
+        <span><i class="dot"></i>Hover or tap any node to focus a single defender.</span>
+        <span><i class="dot"></i>Click a second node to synthesize a dual-type center defender.</span>
+        <span><i class="dot"></i>Use Reset to clear selections and restore the full outer web.</span>
+      </div>
+    </aside>
+
+    <div id="status" class="panel status" role="status" aria-live="polite">
+      Idle web: every type stays fully bright while the full attack lattice glows in the background.
+    </div>
+
+    <button id="resetButton" class="reset" type="button" aria-label="Reset focus and selections" disabled>
+      <span class="reset-mark">X</span>
+      Reset network
+    </button>
+  </div>
+
+  <script>
+    (() => {
+      const canvas = document.getElementById("network");
+      const ctx = canvas.getContext("2d");
+      const statusElement = document.getElementById("status");
+      const resetButton = document.getElementById("resetButton");
+
+      const TYPE_ORDER = [
+        "normal",
+        "fire",
+        "water",
+        "electric",
+        "grass",
+        "ice",
+        "fighting",
+        "poison",
+        "ground",
+        "flying",
+        "psychic",
+        "bug",
+        "rock",
+        "ghost",
+        "dragon",
+        "dark",
+        "steel",
+        "fairy"
+      ];
+
+      const TYPE_DATA = {
+        normal: { name: "Normal", emoji: "⚪", color: "#A8A77A" },
+        fire: { name: "Fire", emoji: "🔥", color: "#EE8130" },
+        water: { name: "Water", emoji: "💧", color: "#6390F0" },
+        electric: { name: "Electric", emoji: "⚡", color: "#F7D02C" },
+        grass: { name: "Grass", emoji: "🍃", color: "#7AC74C" },
+        ice: { name: "Ice", emoji: "❄️", color: "#96D9D6" },
+        fighting: { name: "Fighting", emoji: "👊", color: "#C22E28" },
+        poison: { name: "Poison", emoji: "☠️", color: "#A33EA1" },
+        ground: { name: "Ground", emoji: "🌍", color: "#E2BF65" },
+        flying: { name: "Flying", emoji: "🕊️", color: "#A98FF3" },
+        psychic: { name: "Psychic", emoji: "🔮", color: "#F95587" },
+        bug: { name: "Bug", emoji: "🐛", color: "#A6B91A" },
+        rock: { name: "Rock", emoji: "🪨", color: "#B6A136" },
+        ghost: { name: "Ghost", emoji: "👻", color: "#735797" },
+        dragon: { name: "Dragon", emoji: "🐉", color: "#6F35FC" },
+        dark: { name: "Dark", emoji: "🌑", color: "#705746" },
+        steel: { name: "Steel", emoji: "⚙️", color: "#B7B7CE" },
+        fairy: { name: "Fairy", emoji: "🧚", color: "#D685AD" }
+      };
+
+      // Standard type matchups converted to Pokemon GO multipliers.
+      const TYPE_RELATIONS = {
+        normal: { super: [], resist: ["rock", "steel"], immune: ["ghost"] },
+        fire: { super: ["grass", "ice", "bug", "steel"], resist: ["fire", "water", "rock", "dragon"], immune: [] },
+        water: { super: ["fire", "ground", "rock"], resist: ["water", "grass", "dragon"], immune: [] },
+        electric: { super: ["water", "flying"], resist: ["electric", "grass", "dragon"], immune: ["ground"] },
+        grass: { super: ["water", "ground", "rock"], resist: ["fire", "grass", "poison", "flying", "bug", "dragon", "steel"], immune: [] },
+        ice: { super: ["grass", "ground", "flying", "dragon"], resist: ["fire", "water", "ice", "steel"], immune: [] },
+        fighting: { super: ["normal", "ice", "rock", "dark", "steel"], resist: ["poison", "flying", "psychic", "bug", "fairy"], immune: ["ghost"] },
+        poison: { super: ["grass", "fairy"], resist: ["poison", "ground", "rock", "ghost"], immune: ["steel"] },
+        ground: { super: ["fire", "electric", "poison", "rock", "steel"], resist: ["grass", "bug"], immune: ["flying"] },
+        flying: { super: ["grass", "fighting", "bug"], resist: ["electric", "rock", "steel"], immune: [] },
+        psychic: { super: ["fighting", "poison"], resist: ["psychic", "steel"], immune: ["dark"] },
+        bug: { super: ["grass", "psychic", "dark"], resist: ["fire", "fighting", "poison", "flying", "ghost", "steel", "fairy"], immune: [] },
+        rock: { super: ["fire", "ice", "flying", "bug"], resist: ["fighting", "ground", "steel"], immune: [] },
+        ghost: { super: ["psychic", "ghost"], resist: ["dark"], immune: ["normal"] },
+        dragon: { super: ["dragon"], resist: ["steel"], immune: ["fairy"] },
+        dark: { super: ["psychic", "ghost"], resist: ["fighting", "dark", "fairy"], immune: [] },
+        steel: { super: ["ice", "rock", "fairy"], resist: ["fire", "water", "electric", "steel"], immune: [] },
+        fairy: { super: ["fighting", "dragon", "dark"], resist: ["fire", "poison", "steel"], immune: [] }
+      };
+
+      const PULSE_STYLES = {
+        2.56: { label: "Double Weakness", endColor: "#ff3d6c", speed: 9.6, width: 3.6, glow: 28, alpha: 0.92, mode: "flash" },
+        1.6: { label: "Super Effective", endColor: "#ff6c73", speed: 5.4, width: 2.8, glow: 20, alpha: 0.86, mode: "flash" },
+        0.625: { label: "Resistance", endColor: "#63c8ff", speed: 1.9, width: 2.3, glow: 16, alpha: 0.78, mode: "breathe" },
+        0.39: { label: "Double Resistance / Immune", endColor: "#f3f7ff", speed: 0.95, width: 2, glow: 14, alpha: 0.72, mode: "fade" },
+        0.24: { label: "Triple Resistance", endColor: "#beeaff", speed: 0.55, width: 1.9, glow: 12, alpha: 0.68, mode: "fade" }
+      };
+
+      const COMBINED_VALUES = [2.56, 1.6, 1, 0.625, 0.39, 0.24];
+      const MAX_IDLE_LINE_ALPHA = 0.2;
+      const STAR_DENSITY = 120;
+
+      const state = {
+        width: 0,
+        height: 0,
+        dpr: 1,
+        center: { x: 0, y: 0 },
+        ringRadius: 0,
+        nodeRadius: 35,
+        centerRadius: 72,
+        nodes: [],
+        selectedTypes: [],
+        hoverType: null,
+        lastPointerType: "mouse",
+        stars: [],
+        lastStatus: ""
+      };
+
+      const typeChart = buildTypeChart();
+
+      function buildTypeChart() {
+        const chart = {};
+
+        TYPE_ORDER.forEach((attacker) => {
+          chart[attacker] = {};
+          TYPE_ORDER.forEach((defender) => {
+            chart[attacker][defender] = 1;
+          });
+
+          TYPE_RELATIONS[attacker].super.forEach((defender) => {
+            chart[attacker][defender] = 1.6;
+          });
+
+          TYPE_RELATIONS[attacker].resist.forEach((defender) => {
+            chart[attacker][defender] = 0.625;
+          });
+
+          TYPE_RELATIONS[attacker].immune.forEach((defender) => {
+            chart[attacker][defender] = 0.39;
+          });
+        });
+
+        return chart;
+      }
+
+      function clamp(value, min, max) {
+        return Math.max(min, Math.min(max, value));
+      }
+
+      function lerp(start, end, amount) {
+        return start + (end - start) * amount;
+      }
+
+      function distance(a, b) {
+        return Math.hypot(a.x - b.x, a.y - b.y);
+      }
+
+      function normalize(vector) {
+        const length = Math.hypot(vector.x, vector.y) || 1;
+        return { x: vector.x / length, y: vector.y / length };
+      }
+
+      function perpendicular(vector) {
+        return { x: -vector.y, y: vector.x };
+      }
+
+      function rgba(hex, alpha) {
+        const normalized = hex.replace("#", "");
+        const full = normalized.length === 3
+          ? normalized.split("").map((value) => value + value).join("")
+          : normalized;
+        const red = Number.parseInt(full.slice(0, 2), 16);
+        const green = Number.parseInt(full.slice(2, 4), 16);
+        const blue = Number.parseInt(full.slice(4, 6), 16);
+        return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
+      }
+
+      function randomBetween(min, max) {
+        return Math.random() * (max - min) + min;
+      }
+
+      function normalizeCombinedMultiplier(value) {
+        return COMBINED_VALUES.reduce((closest, candidate) => {
+          return Math.abs(candidate - value) < Math.abs(closest - value) ? candidate : closest;
+        }, COMBINED_VALUES[0]);
+      }
+
+      function getPulse(multiplier, time) {
+        const style = PULSE_STYLES[multiplier];
+        if (!style) {
+          return { intensity: 0, alpha: 0.24, width: 1.2, glow: 0, endColor: "rgba(255,255,255,0.18)" };
+        }
+
+        const wave = (Math.sin(time * style.speed) + 1) / 2;
+        let intensity;
+
+        if (style.mode === "flash") {
+          intensity = Math.pow(wave, multiplier === 2.56 ? 6 : 4);
+        } else if (style.mode === "breathe") {
+          intensity = 0.35 + wave * 0.65;
+        } else {
+          intensity = 0.18 + wave * 0.52;
+        }
+
+        return {
+          intensity,
+          alpha: clamp(style.alpha * (0.72 + intensity * 0.4), 0, 1),
+          width: style.width + intensity * 1.2,
+          glow: style.glow + intensity * 18,
+          endColor: style.endColor,
+          label: style.label
+        };
+      }
+
+      function getMode() {
+        if (state.selectedTypes.length === 2) {
+          return { kind: "dual", defenders: [...state.selectedTypes] };
+        }
+
+        if (state.selectedTypes.length === 1) {
+          return { kind: "single", defender: state.selectedTypes[0], locked: true };
+        }
+
+        if (state.hoverType) {
+          return { kind: "single", defender: state.hoverType, locked: false };
+        }
+
+        return { kind: "idle" };
+      }
+
+      function buildLayout() {
+        state.width = window.innerWidth;
+        state.height = window.innerHeight;
+        state.dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+        canvas.width = Math.floor(state.width * state.dpr);
+        canvas.height = Math.floor(state.height * state.dpr);
+        canvas.style.width = `${state.width}px`;
+        canvas.style.height = `${state.height}px`;
+
+        ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
+
+        state.center = {
+          x: state.width / 2,
+          y: state.height / 2
+        };
+
+        const compact = state.width < 720 || state.height < 720;
+        state.nodeRadius = compact ? 26 : 35;
+        state.centerRadius = compact ? 58 : 76;
+
+        const minDimension = Math.min(state.width, state.height);
+        const padding = compact ? 56 : 92;
+        const preferredRadius = minDimension * (compact ? 0.34 : 0.38);
+        const maxRadius = Math.max(108, minDimension / 2 - padding);
+        const minRadius = compact ? Math.min(124, maxRadius) : Math.min(150, maxRadius);
+        state.ringRadius = clamp(preferredRadius, minRadius, maxRadius);
+
+        state.nodes = TYPE_ORDER.map((type, index) => {
+          const angle = -Math.PI / 2 + (Math.PI * 2 * index) / TYPE_ORDER.length;
+          return {
+            type,
+            angle,
+            radius: state.nodeRadius,
+            x: state.center.x + Math.cos(angle) * state.ringRadius,
+            y: state.center.y + Math.sin(angle) * state.ringRadius
+          };
+        });
+
+        rebuildStars();
+      }
+
+      function rebuildStars() {
+        state.stars = Array.from({ length: STAR_DENSITY }, () => ({
+          x: Math.random(),
+          y: Math.random(),
+          radius: randomBetween(0.35, 1.9),
+          alpha: randomBetween(0.06, 0.42),
+          twinkle: randomBetween(0.35, 1.65),
+          phase: randomBetween(0, Math.PI * 2),
+          drift: randomBetween(8, 28)
+        }));
+      }
+
+      function getNode(type) {
+        return state.nodes.find((node) => node.type === type);
+      }
+
+      function pointFromEvent(event) {
+        const rect = canvas.getBoundingClientRect();
+        return {
+          x: event.clientX - rect.left,
+          y: event.clientY - rect.top
+        };
+      }
+
+      function getHitTarget(point, padding = 0) {
+        const mode = getMode();
+
+        if (mode.kind === "dual" && distance(point, state.center) <= state.centerRadius + padding) {
+          return { kind: "center" };
+        }
+
+        for (let index = state.nodes.length - 1; index >= 0; index -= 1) {
+          const node = state.nodes[index];
+          if (mode.kind === "dual" && mode.defenders.includes(node.type)) {
+            continue;
+          }
+
+          if (distance(point, node) <= node.radius + padding) {
+            return { kind: "node", node };
+          }
+        }
+
+        return null;
+      }
+
+      function clearSelections() {
+        state.selectedTypes = [];
+        state.hoverType = null;
+        updateStatus();
+      }
+
+      function handlePointerMove(event) {
+        state.lastPointerType = event.pointerType || "mouse";
+        const point = pointFromEvent(event);
+        const target = getHitTarget(point, event.pointerType === "touch" ? 12 : 0);
+        canvas.style.cursor = target ? "pointer" : "default";
+
+        if (state.selectedTypes.length === 0 && event.pointerType !== "touch") {
+          state.hoverType = target && target.kind === "node" ? target.node.type : null;
+          updateStatus();
+        }
+      }
+
+      function handlePointerLeave() {
+        canvas.style.cursor = "default";
+        if (state.selectedTypes.length === 0) {
+          state.hoverType = null;
+          updateStatus();
+        }
+      }
+
+      function handlePointerDown(event) {
+        state.lastPointerType = event.pointerType || "mouse";
+        const point = pointFromEvent(event);
+        const target = getHitTarget(point, event.pointerType === "touch" ? 14 : 4);
+        const mode = getMode();
+
+        if (!target) {
+          if (state.selectedTypes.length === 0) {
+            state.hoverType = null;
+          }
+          updateStatus();
+          return;
+        }
+
+        if (target.kind === "center") {
+          clearSelections();
+          return;
+        }
+
+        const { type } = target.node;
+
+        if (mode.kind === "dual") {
+          state.selectedTypes = [type];
+          state.hoverType = null;
+          updateStatus();
+          return;
+        }
+
+        if (state.selectedTypes.length === 0) {
+          state.selectedTypes = [type];
+          state.hoverType = type;
+          updateStatus();
+          return;
+        }
+
+        if (state.selectedTypes.length === 1 && state.selectedTypes[0] === type) {
+          clearSelections();
+          return;
+        }
+
+        if (state.selectedTypes.length === 1 && state.selectedTypes[0] !== type) {
+          state.selectedTypes = [state.selectedTypes[0], type];
+          state.hoverType = null;
+          updateStatus();
+        }
+      }
+
+      function updateStatus() {
+        const mode = getMode();
+        let text;
+
+        if (mode.kind === "idle") {
+          text = "Idle web: every type stays fully bright while the full attack lattice glows in the background.";
+        } else if (mode.kind === "single") {
+          const label = TYPE_DATA[mode.defender].name;
+          text = mode.locked
+            ? `${label} is locked as the defender. Nodes with no incoming interaction dim to 25%. Click one more type to build a dual defender.`
+            : `${label} is the live hover defender. Attackers with non-neutral incoming damage stay bright and pulse at speed based on multiplier.`;
+        } else {
+          const [first, second] = mode.defenders;
+          text = `${TYPE_DATA[first].name} + ${TYPE_DATA[second].name} now form the center defender. Straight shots use combined Pokemon GO multipliers and neutral attackers dim away.`;
+        }
+
+        if (text !== state.lastStatus) {
+          statusElement.textContent = text;
+          state.lastStatus = text;
+        }
+
+        resetButton.disabled = state.selectedTypes.length === 0;
+      }
+
+      function drawBackground(time) {
+        ctx.clearRect(0, 0, state.width, state.height);
+
+        const vignette = ctx.createRadialGradient(
+          state.center.x,
+          state.center.y,
+          state.ringRadius * 0.15,
+          state.center.x,
+          state.center.y,
+          Math.max(state.width, state.height) * 0.7
+        );
+        vignette.addColorStop(0, "rgba(16, 20, 30, 0.95)");
+        vignette.addColorStop(0.5, "rgba(10, 10, 15, 0.98)");
+        vignette.addColorStop(1, "rgba(3, 3, 5, 1)");
+        ctx.fillStyle = vignette;
+        ctx.fillRect(0, 0, state.width, state.height);
+
+        drawNebula(state.center.x - state.ringRadius * 0.6, state.center.y - state.ringRadius * 0.45, state.ringRadius * 0.55, "rgba(74, 122, 255, 0.12)");
+        drawNebula(state.center.x + state.ringRadius * 0.72, state.center.y - state.ringRadius * 0.3, state.ringRadius * 0.42, "rgba(255, 80, 140, 0.08)");
+        drawNebula(state.center.x + state.ringRadius * 0.1, state.center.y + state.ringRadius * 0.74, state.ringRadius * 0.35, "rgba(116, 255, 231, 0.06)");
+
+        ctx.save();
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.04)";
+        ctx.lineWidth = 1;
+
+        for (let ring = 1; ring <= 3; ring += 1) {
+          ctx.beginPath();
+          ctx.arc(state.center.x, state.center.y, state.ringRadius * (0.36 + ring * 0.18), 0, Math.PI * 2);
+          ctx.stroke();
+        }
+
+        for (let index = 0; index < TYPE_ORDER.length; index += 1) {
+          const angle = -Math.PI / 2 + (Math.PI * 2 * index) / TYPE_ORDER.length;
+          ctx.beginPath();
+          ctx.moveTo(state.center.x + Math.cos(angle) * 54, state.center.y + Math.sin(angle) * 54);
+          ctx.lineTo(state.center.x + Math.cos(angle) * (state.ringRadius + 20), state.center.y + Math.sin(angle) * (state.ringRadius + 20));
+          ctx.stroke();
+        }
+
+        ctx.restore();
+
+        drawStars(time);
+      }
+
+      function drawNebula(x, y, radius, color) {
+        const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
+        gradient.addColorStop(0, color);
+        gradient.addColorStop(1, "rgba(0, 0, 0, 0)");
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(x, y, radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      function drawStars(time) {
+        ctx.save();
+        ctx.fillStyle = "#ffffff";
+
+        state.stars.forEach((star) => {
+          const x = star.x * state.width + Math.sin(time * 0.08 + star.phase) * star.drift;
+          const y = star.y * state.height + Math.cos(time * 0.06 + star.phase) * star.drift * 0.35;
+          const alpha = clamp(star.alpha + Math.sin(time * star.twinkle + star.phase) * 0.18, 0.03, 0.6);
+
+          ctx.globalAlpha = alpha;
+          ctx.beginPath();
+          ctx.arc(x, y, star.radius, 0, Math.PI * 2);
+          ctx.fill();
+        });
+
+        ctx.restore();
+      }
+
+      function drawArrowHead(tip, direction, color, alpha, size) {
+        const normalized = normalize(direction);
+        const orthogonal = perpendicular(normalized);
+        const base = {
+          x: tip.x - normalized.x * size,
+          y: tip.y - normalized.y * size
+        };
+
+        ctx.save();
+        ctx.fillStyle = rgba(color, alpha);
+        ctx.shadowColor = rgba(color, alpha);
+        ctx.shadowBlur = size * 1.25;
+        ctx.beginPath();
+        ctx.moveTo(tip.x, tip.y);
+        ctx.lineTo(base.x + orthogonal.x * size * 0.56, base.y + orthogonal.y * size * 0.56);
+        ctx.lineTo(base.x - orthogonal.x * size * 0.56, base.y - orthogonal.y * size * 0.56);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
+
+      function drawCurvedLink(attackerNode, defenderNode, multiplier, options = {}) {
+        const baseline = Boolean(options.baseline);
+        const pulse = baseline ? null : getPulse(multiplier, options.time);
+        const attackerColor = TYPE_DATA[attackerNode.type].color;
+        const effectColor = pulse ? pulse.endColor : multiplier > 1 ? "#ff6c73" : multiplier < 0.39 ? "#f3f7ff" : "#63c8ff";
+        const startDirection = normalize({ x: state.center.x - attackerNode.x, y: state.center.y - attackerNode.y });
+        const endDirection = normalize({ x: defenderNode.x - state.center.x, y: defenderNode.y - state.center.y });
+        const start = {
+          x: attackerNode.x + startDirection.x * attackerNode.radius,
+          y: attackerNode.y + startDirection.y * attackerNode.radius
+        };
+        const end = {
+          x: defenderNode.x - endDirection.x * defenderNode.radius,
+          y: defenderNode.y - endDirection.y * defenderNode.radius
+        };
+
+        const gradient = ctx.createLinearGradient(start.x, start.y, end.x, end.y);
+        const alpha = baseline ? MAX_IDLE_LINE_ALPHA : pulse.alpha;
+        gradient.addColorStop(0, rgba(attackerColor, baseline ? alpha * 0.76 : alpha));
+        gradient.addColorStop(1, rgba(effectColor, alpha));
+
+        ctx.save();
+        ctx.strokeStyle = gradient;
+        ctx.lineWidth = baseline ? 1.3 : pulse.width;
+        ctx.shadowColor = rgba(effectColor, baseline ? 0.18 : 0.5 + pulse.intensity * 0.25);
+        ctx.shadowBlur = baseline ? 6 : pulse.glow;
+        ctx.beginPath();
+        ctx.moveTo(start.x, start.y);
+        ctx.quadraticCurveTo(state.center.x, state.center.y, end.x, end.y);
+        ctx.stroke();
+        ctx.restore();
+
+        drawArrowHead(end, endDirection, effectColor, baseline ? 0.5 : 0.9, baseline ? 6 : 8 + pulse.intensity * 2.4);
+      }
+
+      function drawLoopLink(node, multiplier, time, baseline = false) {
+        const pulse = baseline ? null : getPulse(multiplier, time);
+        const attackerColor = TYPE_DATA[node.type].color;
+        const effectColor = pulse ? pulse.endColor : multiplier > 1 ? "#ff6c73" : multiplier < 0.39 ? "#f3f7ff" : "#63c8ff";
+        const outward = normalize({ x: node.x - state.center.x, y: node.y - state.center.y });
+        const tangent = perpendicular(outward);
+        const lift = node.radius * 2.15;
+        const start = {
+          x: node.x + tangent.x * node.radius * 0.62 - outward.x * node.radius * 0.18,
+          y: node.y + tangent.y * node.radius * 0.62 - outward.y * node.radius * 0.18
+        };
+        const end = {
+          x: node.x - tangent.x * node.radius * 0.56 - outward.x * node.radius * 0.1,
+          y: node.y - tangent.y * node.radius * 0.56 - outward.y * node.radius * 0.1
+        };
+        const controlA = {
+          x: node.x + tangent.x * node.radius * 1.7 + outward.x * lift,
+          y: node.y + tangent.y * node.radius * 1.7 + outward.y * lift
+        };
+        const controlB = {
+          x: node.x - tangent.x * node.radius * 1.9 + outward.x * lift,
+          y: node.y - tangent.y * node.radius * 1.9 + outward.y * lift
+        };
+
+        const gradient = ctx.createLinearGradient(start.x, start.y, end.x, end.y);
+        const alpha = baseline ? MAX_IDLE_LINE_ALPHA : pulse.alpha;
+        gradient.addColorStop(0, rgba(attackerColor, baseline ? alpha * 0.76 : alpha));
+        gradient.addColorStop(1, rgba(effectColor, alpha));
+
+        ctx.save();
+        ctx.strokeStyle = gradient;
+        ctx.lineWidth = baseline ? 1.3 : pulse.width;
+        ctx.shadowColor = rgba(effectColor, baseline ? 0.18 : 0.56);
+        ctx.shadowBlur = baseline ? 5 : pulse.glow;
+        ctx.beginPath();
+        ctx.moveTo(start.x, start.y);
+        ctx.bezierCurveTo(controlA.x, controlA.y, controlB.x, controlB.y, end.x, end.y);
+        ctx.stroke();
+        ctx.restore();
+
+        const derivative = normalize({
+          x: end.x - controlB.x,
+          y: end.y - controlB.y
+        });
+        drawArrowHead(end, derivative, effectColor, baseline ? 0.5 : 0.9, baseline ? 6 : 8 + (pulse ? pulse.intensity * 2 : 0));
+      }
+
+      function drawStraightLink(attackerNode, multiplier, time) {
+        const direction = normalize({ x: state.center.x - attackerNode.x, y: state.center.y - attackerNode.y });
+        const start = {
+          x: attackerNode.x + direction.x * attackerNode.radius,
+          y: attackerNode.y + direction.y * attackerNode.radius
+        };
+        const end = {
+          x: state.center.x - direction.x * state.centerRadius,
+          y: state.center.y - direction.y * state.centerRadius
+        };
+
+        const pulse = multiplier === 1 ? null : getPulse(multiplier, time);
+        const attackerColor = TYPE_DATA[attackerNode.type].color;
+        const effectColor = multiplier === 1 ? "rgba(255,255,255,0.12)" : pulse.endColor;
+        const alpha = multiplier === 1 ? 0.09 : pulse.alpha;
+        const gradient = ctx.createLinearGradient(start.x, start.y, end.x, end.y);
+
+        gradient.addColorStop(0, rgba(attackerColor, multiplier === 1 ? 0.14 : alpha));
+        gradient.addColorStop(1, multiplier === 1 ? "rgba(255,255,255,0.08)" : rgba(effectColor, alpha));
+
+        ctx.save();
+        ctx.strokeStyle = gradient;
+        ctx.lineWidth = multiplier === 1 ? 1.2 : pulse.width;
+        ctx.shadowColor = multiplier === 1 ? "rgba(255,255,255,0.06)" : rgba(effectColor, 0.55);
+        ctx.shadowBlur = multiplier === 1 ? 3 : pulse.glow;
+        ctx.beginPath();
+        ctx.moveTo(start.x, start.y);
+        ctx.lineTo(end.x, end.y);
+        ctx.stroke();
+        ctx.restore();
+
+        drawArrowHead(end, direction, multiplier === 1 ? "#a9b0bc" : effectColor, multiplier === 1 ? 0.22 : 0.92, multiplier === 1 ? 5.5 : 8 + pulse.intensity * 2.2);
+      }
+
+      function drawIdleLinks() {
+        TYPE_ORDER.forEach((attacker) => {
+          TYPE_ORDER.forEach((defender) => {
+            const multiplier = typeChart[attacker][defender];
+            if (multiplier === 1) {
+              return;
+            }
+
+            const attackerNode = getNode(attacker);
+            const defenderNode = getNode(defender);
+
+            if (attacker === defender) {
+              drawLoopLink(attackerNode, multiplier, 0, true);
+            } else {
+              drawCurvedLink(attackerNode, defenderNode, multiplier, { baseline: true, time: 0 });
+            }
+          });
+        });
+      }
+
+      function drawSingleFocus(mode, time) {
+        TYPE_ORDER.forEach((attacker) => {
+          const multiplier = typeChart[attacker][mode.defender];
+          if (multiplier === 1) {
+            return;
+          }
+
+          const attackerNode = getNode(attacker);
+          const defenderNode = getNode(mode.defender);
+
+          if (attacker === mode.defender) {
+            drawLoopLink(attackerNode, multiplier, time, false);
+          } else {
+            drawCurvedLink(attackerNode, defenderNode, multiplier, { time });
+          }
+        });
+      }
+
+      function drawDualFocus(mode, time) {
+        TYPE_ORDER.forEach((type) => {
+          if (mode.defenders.includes(type)) {
+            return;
+          }
+
+          const attackerNode = getNode(type);
+          const combined = normalizeCombinedMultiplier(typeChart[type][mode.defenders[0]] * typeChart[type][mode.defenders[1]]);
+          drawStraightLink(attackerNode, combined, time);
+        });
+      }
+
+      function getNodeVisual(type, mode, time) {
+        const baseVisual = {
+          opacity: 1,
+          glow: 0.16,
+          halo: 0.14,
+          scale: 1,
+          pulse: null,
+          focused: false
+        };
+
+        if (mode.kind === "idle") {
+          return baseVisual;
+        }
+
+        if (mode.kind === "single") {
+          if (type === mode.defender) {
+            return {
+              opacity: 1,
+              glow: 0.95,
+              halo: 0.65,
+              scale: 1.04,
+              pulse: getPulse(typeChart[type][type] === 1 ? 1.6 : typeChart[type][type], time),
+              focused: true
+            };
+          }
+
+          const multiplier = typeChart[type][mode.defender];
+          if (multiplier !== 1) {
+            return {
+              opacity: 1,
+              glow: 0.42,
+              halo: 0.28,
+              scale: 1,
+              pulse: getPulse(multiplier, time),
+              focused: false
+            };
+          }
+
+          return {
+            opacity: 0.25,
+            glow: 0.04,
+            halo: 0,
+            scale: 1,
+            pulse: null,
+            focused: false
+          };
+        }
+
+        if (mode.defenders.includes(type)) {
+          return { hidden: true };
+        }
+
+        const combined = normalizeCombinedMultiplier(typeChart[type][mode.defenders[0]] * typeChart[type][mode.defenders[1]]);
+        if (combined !== 1) {
+          return {
+            opacity: 1,
+            glow: 0.4,
+            halo: 0.28,
+            scale: 1,
+            pulse: getPulse(combined, time),
+            focused: false
+          };
+        }
+
+        return {
+          opacity: 0.25,
+          glow: 0.04,
+          halo: 0,
+          scale: 1,
+          pulse: null,
+          focused: false
+        };
+      }
+
+      function drawNode(node, visual) {
+        if (visual.hidden) {
+          return;
+        }
+
+        const { color, emoji, name } = TYPE_DATA[node.type];
+        const pulseBoost = visual.pulse ? visual.pulse.intensity : 0;
+        const haloRadius = node.radius * (1.55 + visual.halo * 0.35 + pulseBoost * 0.08);
+        const ringWidth = 2.2 + visual.glow * 1.6 + pulseBoost * 0.4;
+        const scaledRadius = node.radius * visual.scale;
+
+        ctx.save();
+        ctx.globalAlpha = visual.opacity;
+
+        if (visual.halo > 0) {
+          const halo = ctx.createRadialGradient(node.x, node.y, scaledRadius * 0.6, node.x, node.y, haloRadius);
+          halo.addColorStop(0, rgba(color, 0.08 + visual.halo * 0.08 + pulseBoost * 0.08));
+          halo.addColorStop(1, rgba(color, 0));
+          ctx.fillStyle = halo;
+          ctx.beginPath();
+          ctx.arc(node.x, node.y, haloRadius, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.shadowColor = rgba(color, 0.35 + visual.glow * 0.22 + pulseBoost * 0.12);
+        ctx.shadowBlur = 10 + visual.glow * 18 + pulseBoost * 12;
+        ctx.fillStyle = "rgba(3, 3, 5, 0.96)";
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, scaledRadius, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.lineWidth = ringWidth;
+        ctx.strokeStyle = rgba(color, 0.95);
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, scaledRadius, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.12)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, scaledRadius - 3.2, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.fillStyle = rgba("#ffffff", 0.95);
+        ctx.font = `700 ${Math.round(scaledRadius * 0.82)}px "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(emoji, node.x, node.y - scaledRadius * 0.23);
+
+        ctx.fillStyle = rgba("#ffffff", 0.93);
+        ctx.font = `700 ${Math.max(10, Math.round(scaledRadius * 0.33))}px "Segoe UI Variable Display", "Aptos", sans-serif`;
+        ctx.fillText(name.toUpperCase(), node.x, node.y + scaledRadius * 0.43);
+
+        ctx.restore();
+      }
+
+      function drawCenterNode(types, time) {
+        const [leftType, rightType] = types;
+        const left = TYPE_DATA[leftType];
+        const right = TYPE_DATA[rightType];
+        const glowMix = 0.65 + Math.sin(time * 1.6) * 0.08;
+
+        ctx.save();
+
+        const aura = ctx.createRadialGradient(
+          state.center.x,
+          state.center.y,
+          state.centerRadius * 0.5,
+          state.center.x,
+          state.center.y,
+          state.centerRadius * 2.2
+        );
+        aura.addColorStop(0, rgba(left.color, 0.18));
+        aura.addColorStop(0.45, rgba(right.color, 0.12));
+        aura.addColorStop(1, rgba("#000000", 0));
+        ctx.fillStyle = aura;
+        ctx.beginPath();
+        ctx.arc(state.center.x, state.center.y, state.centerRadius * 2.2, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.shadowColor = rgba(left.color, 0.28);
+        ctx.shadowBlur = 24;
+        ctx.fillStyle = "rgba(3, 3, 5, 0.97)";
+        ctx.beginPath();
+        ctx.arc(state.center.x, state.center.y, state.centerRadius, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.lineCap = "round";
+        ctx.lineWidth = 7;
+        ctx.strokeStyle = rgba(left.color, glowMix);
+        ctx.beginPath();
+        ctx.arc(state.center.x, state.center.y, state.centerRadius - 2.5, Math.PI / 2, (Math.PI * 3) / 2);
+        ctx.stroke();
+
+        ctx.strokeStyle = rgba(right.color, glowMix);
+        ctx.beginPath();
+        ctx.arc(state.center.x, state.center.y, state.centerRadius - 2.5, -Math.PI / 2, Math.PI / 2);
+        ctx.stroke();
+
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.14)";
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.arc(state.center.x, state.center.y, state.centerRadius - 10, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.font = `700 ${Math.round(state.centerRadius * 0.52)}px "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif`;
+        ctx.fillText(`${left.emoji} ${right.emoji}`, state.center.x, state.center.y - state.centerRadius * 0.16);
+
+        ctx.font = `800 ${Math.max(12, Math.round(state.centerRadius * 0.22))}px "Segoe UI Variable Display", "Aptos", sans-serif`;
+        ctx.fillText(`${left.name.toUpperCase()} / ${right.name.toUpperCase()}`, state.center.x, state.center.y + state.centerRadius * 0.2);
+
+        ctx.font = `600 ${Math.max(10, Math.round(state.centerRadius * 0.15))}px "Segoe UI Variable Display", "Aptos", sans-serif`;
+        ctx.fillStyle = "rgba(255, 255, 255, 0.72)";
+        ctx.fillText("COMBINED DEFENDER", state.center.x, state.center.y + state.centerRadius * 0.44);
+
+        ctx.restore();
+      }
+
+      function render(timestamp) {
+        const time = timestamp * 0.001;
+        const mode = getMode();
+
+        drawBackground(time);
+
+        if (mode.kind === "idle") {
+          drawIdleLinks();
+        } else if (mode.kind === "single") {
+          drawSingleFocus(mode, time);
+        } else {
+          drawDualFocus(mode, time);
+        }
+
+        state.nodes.forEach((node) => {
+          drawNode(node, getNodeVisual(node.type, mode, time));
+        });
+
+        if (mode.kind === "dual") {
+          drawCenterNode(mode.defenders, time);
+        }
+
+        requestAnimationFrame(render);
+      }
+
+      resetButton.addEventListener("click", clearSelections);
+      canvas.addEventListener("pointermove", handlePointerMove);
+      canvas.addEventListener("pointerleave", handlePointerLeave);
+      canvas.addEventListener("pointerdown", handlePointerDown);
+      window.addEventListener("resize", buildLayout);
+
+      buildLayout();
+      updateStatus();
+      requestAnimationFrame(render);
+    })();
+  </script>
+</body>
+</html>
