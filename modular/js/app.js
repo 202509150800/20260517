@@ -3,11 +3,13 @@
   const ctx = canvas.getContext("2d");
   const statusElement = document.getElementById("status");
   const resetButton = document.getElementById("resetButton");
+  const modeTabs = document.querySelectorAll(".mode-tab");
   const typeDataService = window.createTypeDataService();
   const {
     typeOrder: TYPE_ORDER,
     typeData: TYPE_DATA,
     pulseStyles: PULSE_STYLES,
+    combinedValues: COMBINED_VALUES,
     maxIdleLineAlpha: MAX_IDLE_LINE_ALPHA,
     starDensity: STAR_DENSITY
   } = typeDataService.getConfig();
@@ -25,13 +27,18 @@
     hoverType: null,
     lastPointerType: "mouse",
     stars: [],
-    lastStatus: ""
+    lastStatus: "",
+    viewMode: "defender"
   };
 
   const typeChart = typeDataService.getTypeChart();
 
   function clamp(value, min, max) {
     return Math.max(min, Math.min(max, value));
+  }
+
+  function lerp(start, end, amount) {
+    return start + (end - start) * amount;
   }
 
   function distance(a, b) {
@@ -63,7 +70,9 @@
   }
 
   function normalizeCombinedMultiplier(value) {
-    return typeDataService.normalizeCombinedMultiplier(value);
+    return COMBINED_VALUES.reduce((closest, candidate) => {
+      return Math.abs(candidate - value) < Math.abs(closest - value) ? candidate : closest;
+    }, COMBINED_VALUES[0]);
   }
 
   function getPulse(multiplier, time) {
@@ -94,6 +103,19 @@
   }
 
   function getMode() {
+    if (state.viewMode === "attacker") {
+      if (state.selectedTypes.length === 2) {
+        return { kind: "attacker-dual", attackers: [...state.selectedTypes] };
+      }
+      if (state.selectedTypes.length === 1) {
+        return { kind: "attacker-single", attacker: state.selectedTypes[0], locked: true };
+      }
+      if (state.hoverType) {
+        return { kind: "attacker-single", attacker: state.hoverType, locked: false };
+      }
+      return { kind: "idle" };
+    }
+
     if (state.selectedTypes.length === 2) {
       return { kind: "dual", defenders: [...state.selectedTypes] };
     }
@@ -178,13 +200,16 @@
   function getHitTarget(point, padding = 0) {
     const mode = getMode();
 
-    if (mode.kind === "dual" && distance(point, state.center) <= state.centerRadius + padding) {
+    if ((mode.kind === "dual" || mode.kind === "attacker-dual") && distance(point, state.center) <= state.centerRadius + padding) {
       return { kind: "center" };
     }
 
     for (let index = state.nodes.length - 1; index >= 0; index -= 1) {
       const node = state.nodes[index];
       if (mode.kind === "dual" && mode.defenders.includes(node.type)) {
+        continue;
+      }
+      if (mode.kind === "attacker-dual" && mode.attackers.includes(node.type)) {
         continue;
       }
 
@@ -274,15 +299,25 @@
     let text;
 
     if (mode.kind === "idle") {
-      text = "Idle web: every type stays fully bright while the full attack lattice glows in the background.";
+      text = state.viewMode === "attacker"
+        ? "Attacker mode: hover or click a type to see which types it can hit super-effectively (\xd71.6 or \xd72.56). Click a second type for dual-type coverage."
+        : "Idle web: every type stays fully bright while the full attack lattice glows in the background.";
     } else if (mode.kind === "single") {
       const label = TYPE_DATA[mode.defender].name;
       text = mode.locked
         ? `${label} is locked as the defender. Nodes with no incoming interaction dim to 25%. Click one more type to build a dual defender.`
         : `${label} is the live hover defender. Attackers with non-neutral incoming damage stay bright and pulse at speed based on multiplier.`;
-    } else {
+    } else if (mode.kind === "dual") {
       const [first, second] = mode.defenders;
       text = `${TYPE_DATA[first].name} + ${TYPE_DATA[second].name} now form the center defender. Straight shots use combined Pokemon GO multipliers and neutral attackers dim away.`;
+    } else if (mode.kind === "attacker-single") {
+      const label = TYPE_DATA[mode.attacker].name;
+      text = mode.locked
+        ? `${label} is your attacker \u2014 bright nodes are types it hits super-effectively. Click a second type to combine attack coverage.`
+        : `${label} attack preview \u2014 only super-effective targets stay bright.`;
+    } else if (mode.kind === "attacker-dual") {
+      const [first, second] = mode.attackers;
+      text = `${TYPE_DATA[first].name} + ${TYPE_DATA[second].name} dual attacker \u2014 spiral lines show coverage from both types. Only effective hits are shown.`;
     }
 
     if (text !== state.lastStatus) {
@@ -542,13 +577,159 @@
 
   function drawDualFocus(mode, time) {
     TYPE_ORDER.forEach((type) => {
+      const attackerNode = getNode(type);
       if (mode.defenders.includes(type)) {
+        // Still draw if this defender type attacks the combined center non-neutrally
+        const combined = normalizeCombinedMultiplier(typeChart[type][mode.defenders[0]] * typeChart[type][mode.defenders[1]]);
+        if (combined !== 1) {
+          drawStraightLink(attackerNode, combined, time);
+        }
         return;
       }
 
-      const attackerNode = getNode(type);
       const combined = normalizeCombinedMultiplier(typeChart[type][mode.defenders[0]] * typeChart[type][mode.defenders[1]]);
       drawStraightLink(attackerNode, combined, time);
+    });
+  }
+
+  function drawStraightLinkToTarget(targetNode, multiplier, attackerType, time) {
+    const direction = normalize({ x: targetNode.x - state.center.x, y: targetNode.y - state.center.y });
+    const start = {
+      x: state.center.x + direction.x * state.centerRadius,
+      y: state.center.y + direction.y * state.centerRadius
+    };
+    const end = {
+      x: targetNode.x - direction.x * targetNode.radius,
+      y: targetNode.y - direction.y * targetNode.radius
+    };
+
+    const pulse = getPulse(multiplier, time);
+    const attackerColor = TYPE_DATA[attackerType].color;
+    const effectColor = pulse.endColor;
+    const gradient = ctx.createLinearGradient(start.x, start.y, end.x, end.y);
+    gradient.addColorStop(0, rgba(attackerColor, pulse.alpha));
+    gradient.addColorStop(1, rgba(effectColor, pulse.alpha));
+
+    ctx.save();
+    ctx.strokeStyle = gradient;
+    ctx.lineWidth = pulse.width;
+    ctx.shadowColor = rgba(effectColor, 0.55);
+    ctx.shadowBlur = pulse.glow;
+    ctx.beginPath();
+    ctx.moveTo(start.x, start.y);
+    ctx.lineTo(end.x, end.y);
+    ctx.stroke();
+    ctx.restore();
+
+    drawArrowHead(end, direction, effectColor, 0.92, 8 + pulse.intensity * 2.2);
+  }
+
+  function drawSpiralLinksToTarget(targetNode, mult1, mult2, attacker1, attacker2, time) {
+    const direction = normalize({ x: targetNode.x - state.center.x, y: targetNode.y - state.center.y });
+    const perp = perpendicular(direction);
+    const dist = distance(state.center, targetNode);
+    const offset = Math.min(dist * 0.26, 55);
+
+    const start = {
+      x: state.center.x + direction.x * state.centerRadius,
+      y: state.center.y + direction.y * state.centerRadius
+    };
+    const end = {
+      x: targetNode.x - direction.x * targetNode.radius,
+      y: targetNode.y - direction.y * targetNode.radius
+    };
+
+    const oneThird = {
+      x: start.x + (end.x - start.x) / 3,
+      y: start.y + (end.y - start.y) / 3
+    };
+    const twoThirds = {
+      x: start.x + (end.x - start.x) * 2 / 3,
+      y: start.y + (end.y - start.y) * 2 / 3
+    };
+
+    const pulse1 = getPulse(normalizeCombinedMultiplier(mult1), time);
+    const color1 = TYPE_DATA[attacker1].color;
+    const ctrl1a = { x: oneThird.x + perp.x * offset, y: oneThird.y + perp.y * offset };
+    const ctrl1b = { x: twoThirds.x - perp.x * offset, y: twoThirds.y - perp.y * offset };
+    const gradient1 = ctx.createLinearGradient(start.x, start.y, end.x, end.y);
+    gradient1.addColorStop(0, rgba(color1, pulse1.alpha));
+    gradient1.addColorStop(1, rgba(pulse1.endColor, pulse1.alpha));
+
+    ctx.save();
+    ctx.strokeStyle = gradient1;
+    ctx.lineWidth = pulse1.width * 0.8;
+    ctx.shadowColor = rgba(pulse1.endColor, 0.45);
+    ctx.shadowBlur = pulse1.glow * 0.75;
+    ctx.beginPath();
+    ctx.moveTo(start.x, start.y);
+    ctx.bezierCurveTo(ctrl1a.x, ctrl1a.y, ctrl1b.x, ctrl1b.y, end.x, end.y);
+    ctx.stroke();
+    ctx.restore();
+
+    const pulse2 = getPulse(normalizeCombinedMultiplier(mult2), time);
+    const color2 = TYPE_DATA[attacker2].color;
+    const ctrl2a = { x: oneThird.x - perp.x * offset, y: oneThird.y - perp.y * offset };
+    const ctrl2b = { x: twoThirds.x + perp.x * offset, y: twoThirds.y + perp.y * offset };
+    const gradient2 = ctx.createLinearGradient(start.x, start.y, end.x, end.y);
+    gradient2.addColorStop(0, rgba(color2, pulse2.alpha));
+    gradient2.addColorStop(1, rgba(pulse2.endColor, pulse2.alpha));
+
+    ctx.save();
+    ctx.strokeStyle = gradient2;
+    ctx.lineWidth = pulse2.width * 0.8;
+    ctx.shadowColor = rgba(pulse2.endColor, 0.45);
+    ctx.shadowBlur = pulse2.glow * 0.75;
+    ctx.beginPath();
+    ctx.moveTo(start.x, start.y);
+    ctx.bezierCurveTo(ctrl2a.x, ctrl2a.y, ctrl2b.x, ctrl2b.y, end.x, end.y);
+    ctx.stroke();
+    ctx.restore();
+
+    const bestPulse = mult1 >= mult2 ? pulse1 : pulse2;
+    drawArrowHead(end, direction, bestPulse.endColor, 0.92, 8 + bestPulse.intensity * 2.2);
+  }
+
+  function drawAttackerSingleFocus(mode, time) {
+    const attackerNode = getNode(mode.attacker);
+    TYPE_ORDER.forEach((defender) => {
+      const multiplier = typeChart[mode.attacker][defender];
+      if (multiplier <= 1) {
+        return;
+      }
+      const defenderNode = getNode(defender);
+      if (mode.attacker === defender) {
+        drawLoopLink(attackerNode, multiplier, time, false);
+      } else {
+        drawCurvedLink(attackerNode, defenderNode, multiplier, { time });
+      }
+    });
+  }
+
+  function drawAttackerDualFocus(mode, time) {
+    TYPE_ORDER.forEach((type) => {
+      const mult1 = typeChart[mode.attackers[0]][type];
+      const mult2 = typeChart[mode.attackers[1]][type];
+      const eff1 = mult1 > 1;
+      const eff2 = mult2 > 1;
+      if (!eff1 && !eff2) {
+        return;
+      }
+      const targetNode = getNode(type);
+      if (mode.attackers.includes(type)) {
+        // Self-target: one or both attackers hit their own type — draw straight link from center out to ring node
+        const attacker = eff1 ? mode.attackers[0] : mode.attackers[1];
+        const mult = normalizeCombinedMultiplier(eff1 ? mult1 : mult2);
+        drawStraightLinkToTarget(targetNode, mult, attacker, time);
+        return;
+      }
+      if (eff1 && eff2) {
+        drawSpiralLinksToTarget(targetNode, mult1, mult2, mode.attackers[0], mode.attackers[1], time);
+      } else {
+        const attacker = eff1 ? mode.attackers[0] : mode.attackers[1];
+        const mult = normalizeCombinedMultiplier(eff1 ? mult1 : mult2);
+        drawStraightLinkToTarget(targetNode, mult, attacker, time);
+      }
     });
   }
 
@@ -601,7 +782,15 @@
     }
 
     if (mode.defenders.includes(type)) {
-      return { hidden: true };
+      // Keep defenders visible in ring with a "selected defender" style
+      return {
+        opacity: 0.82,
+        glow: 0.72,
+        halo: 0.45,
+        scale: 1.04,
+        pulse: getPulse(1.6, time),
+        focused: true
+      };
     }
 
     const combined = normalizeCombinedMultiplier(typeChart[type][mode.defenders[0]] * typeChart[type][mode.defenders[1]]);
@@ -624,6 +813,63 @@
       pulse: null,
       focused: false
     };
+  }
+
+  function getNodeVisualAttacker(type, mode, time) {
+    if (mode.kind === "attacker-single") {
+      if (type === mode.attacker) {
+        return {
+          opacity: 1,
+          glow: 0.95,
+          halo: 0.65,
+          scale: 1.04,
+          pulse: getPulse(1.6, time),
+          focused: true
+        };
+      }
+      const multiplier = typeChart[mode.attacker][type];
+      if (multiplier > 1) {
+        return {
+          opacity: 1,
+          glow: 0.42,
+          halo: 0.28,
+          scale: 1,
+          pulse: getPulse(multiplier, time),
+          focused: false
+        };
+      }
+      return { opacity: 0.25, glow: 0.04, halo: 0, scale: 1, pulse: null, focused: false };
+    }
+
+    if (mode.kind === "attacker-dual") {
+      if (mode.attackers.includes(type)) {
+        // Keep attacker nodes visible in ring with a "selected attacker" style
+        return {
+          opacity: 0.82,
+          glow: 0.72,
+          halo: 0.45,
+          scale: 1.04,
+          pulse: getPulse(1.6, time),
+          focused: true
+        };
+      }
+      const mult1 = typeChart[mode.attackers[0]][type];
+      const mult2 = typeChart[mode.attackers[1]][type];
+      const best = Math.max(mult1, mult2);
+      if (best > 1) {
+        return {
+          opacity: 1,
+          glow: 0.4,
+          halo: 0.28,
+          scale: 1,
+          pulse: getPulse(normalizeCombinedMultiplier(best), time),
+          focused: false
+        };
+      }
+      return { opacity: 0.25, glow: 0.04, halo: 0, scale: 1, pulse: null, focused: false };
+    }
+
+    return { opacity: 1, glow: 0.16, halo: 0.14, scale: 1, pulse: null, focused: false };
   }
 
   function drawNode(node, visual) {
@@ -748,6 +994,121 @@
     ctx.restore();
   }
 
+  function drawCenterNodeAttacker(types, time) {
+    const [leftType, rightType] = types;
+    const left = TYPE_DATA[leftType];
+    const right = TYPE_DATA[rightType];
+    const glowMix = 0.65 + Math.sin(time * 1.6) * 0.08;
+
+    ctx.save();
+
+    const aura = ctx.createRadialGradient(
+      state.center.x,
+      state.center.y,
+      state.centerRadius * 0.5,
+      state.center.x,
+      state.center.y,
+      state.centerRadius * 2.2
+    );
+    aura.addColorStop(0, rgba(left.color, 0.18));
+    aura.addColorStop(0.45, rgba(right.color, 0.12));
+    aura.addColorStop(1, rgba("#000000", 0));
+    ctx.fillStyle = aura;
+    ctx.beginPath();
+    ctx.arc(state.center.x, state.center.y, state.centerRadius * 2.2, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.shadowColor = rgba(left.color, 0.28);
+    ctx.shadowBlur = 24;
+    ctx.fillStyle = "rgba(3, 3, 5, 0.97)";
+    ctx.beginPath();
+    ctx.arc(state.center.x, state.center.y, state.centerRadius, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.lineCap = "round";
+    ctx.lineWidth = 7;
+    ctx.strokeStyle = rgba(left.color, glowMix);
+    ctx.beginPath();
+    ctx.arc(state.center.x, state.center.y, state.centerRadius - 2.5, Math.PI / 2, (Math.PI * 3) / 2);
+    ctx.stroke();
+
+    ctx.strokeStyle = rgba(right.color, glowMix);
+    ctx.beginPath();
+    ctx.arc(state.center.x, state.center.y, state.centerRadius - 2.5, -Math.PI / 2, Math.PI / 2);
+    ctx.stroke();
+
+    ctx.strokeStyle = "rgba(255, 80, 100, 0.22)";
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.arc(state.center.x, state.center.y, state.centerRadius - 10, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = `700 ${Math.round(state.centerRadius * 0.52)}px "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif`;
+    ctx.fillText(`${left.emoji} ${right.emoji}`, state.center.x, state.center.y - state.centerRadius * 0.16);
+
+    ctx.font = `800 ${Math.max(12, Math.round(state.centerRadius * 0.22))}px "Segoe UI Variable Display", "Aptos", sans-serif`;
+    ctx.fillText(`${left.name.toUpperCase()} / ${right.name.toUpperCase()}`, state.center.x, state.center.y + state.centerRadius * 0.2);
+
+    ctx.font = `600 ${Math.max(10, Math.round(state.centerRadius * 0.15))}px "Segoe UI Variable Display", "Aptos", sans-serif`;
+    ctx.fillStyle = "rgba(255, 140, 150, 0.85)";
+    ctx.fillText("COMBINED ATTACKER", state.center.x, state.center.y + state.centerRadius * 0.44);
+
+    ctx.restore();
+  }
+
+  function drawSingleCenterIndicator(type, role, time) {
+    const { color, emoji, name } = TYPE_DATA[type];
+    const r = state.centerRadius * 0.72;
+    const glowPulse = 0.5 + Math.sin(time * 2.0) * 0.15;
+    const accentColor = role === "attacker" ? "#ff8a90" : "#8ee7ff";
+
+    ctx.save();
+
+    const aura = ctx.createRadialGradient(state.center.x, state.center.y, r * 0.3, state.center.x, state.center.y, r * 1.85);
+    aura.addColorStop(0, rgba(color, 0.1));
+    aura.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = aura;
+    ctx.beginPath();
+    ctx.arc(state.center.x, state.center.y, r * 1.85, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.shadowColor = rgba(color, 0.28);
+    ctx.shadowBlur = 18;
+    ctx.fillStyle = "rgba(3, 3, 5, 0.93)";
+    ctx.beginPath();
+    ctx.arc(state.center.x, state.center.y, r, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.lineWidth = 3.2;
+    ctx.strokeStyle = rgba(color, 0.75 + glowPulse * 0.18);
+    ctx.shadowColor = rgba(color, 0.45);
+    ctx.shadowBlur = 14;
+    ctx.beginPath();
+    ctx.arc(state.center.x, state.center.y, r - 1.8, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
+    ctx.font = `700 ${Math.round(r * 0.72)}px "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(emoji, state.center.x, state.center.y - r * 0.14);
+
+    ctx.fillStyle = "rgba(255, 255, 255, 0.92)";
+    ctx.font = `800 ${Math.max(10, Math.round(r * 0.3))}px "Segoe UI Variable Display", "Aptos", sans-serif`;
+    ctx.fillText(name.toUpperCase(), state.center.x, state.center.y + r * 0.34);
+
+    ctx.font = `600 ${Math.max(9, Math.round(r * 0.2))}px "Segoe UI Variable Display", "Aptos", sans-serif`;
+    ctx.fillStyle = accentColor;
+    ctx.fillText(role === "attacker" ? "ATTACKING" : "DEFENDING", state.center.x, state.center.y + r * 0.58);
+
+    ctx.restore();
+  }
+
   function render(timestamp) {
     const time = timestamp * 0.001;
     const mode = getMode();
@@ -758,16 +1119,30 @@
       drawIdleLinks();
     } else if (mode.kind === "single") {
       drawSingleFocus(mode, time);
-    } else {
+    } else if (mode.kind === "dual") {
       drawDualFocus(mode, time);
+    } else if (mode.kind === "attacker-single") {
+      drawAttackerSingleFocus(mode, time);
+    } else if (mode.kind === "attacker-dual") {
+      drawAttackerDualFocus(mode, time);
     }
 
     state.nodes.forEach((node) => {
-      drawNode(node, getNodeVisual(node.type, mode, time));
+      const isAttackerMode = mode.kind === "attacker-single" || mode.kind === "attacker-dual";
+      const visual = isAttackerMode
+        ? getNodeVisualAttacker(node.type, mode, time)
+        : getNodeVisual(node.type, mode, time);
+      drawNode(node, visual);
     });
 
     if (mode.kind === "dual") {
       drawCenterNode(mode.defenders, time);
+    } else if (mode.kind === "attacker-dual") {
+      drawCenterNodeAttacker(mode.attackers, time);
+    } else if (mode.kind === "single") {
+      drawSingleCenterIndicator(mode.defender, "defender", time);
+    } else if (mode.kind === "attacker-single") {
+      drawSingleCenterIndicator(mode.attacker, "attacker", time);
     }
 
     requestAnimationFrame(render);
@@ -778,6 +1153,21 @@
   canvas.addEventListener("pointerleave", handlePointerLeave);
   canvas.addEventListener("pointerdown", handlePointerDown);
   window.addEventListener("resize", buildLayout);
+
+  modeTabs.forEach((tab) => {
+    tab.addEventListener("click", () => {
+      const newMode = tab.dataset.mode;
+      if (state.viewMode === newMode) {
+        return;
+      }
+      state.viewMode = newMode;
+      state.selectedTypes = [];
+      state.hoverType = null;
+      modeTabs.forEach((t) => t.classList.toggle("active", t.dataset.mode === newMode));
+      state.lastStatus = "";
+      updateStatus();
+    });
+  });
 
   buildLayout();
   updateStatus();

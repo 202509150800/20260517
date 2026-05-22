@@ -65,14 +65,19 @@
 
       <h3>Controls</h3>
       <div class="control-notes">
-        <span><i class="dot"></i>Hover or tap any node to focus a single defender.</span>
-        <span><i class="dot"></i>Click a second node to synthesize a dual-type center defender.</span>
+        <span><i class="dot"></i>Hover or tap any node to focus a single defender or attacker.</span>
+        <span><i class="dot"></i>Click a second node to synthesize a dual-type center node.</span>
         <span><i class="dot"></i>Use Reset to clear selections and restore the full outer web.</span>
       </div>
     </aside>
 
     <div id="status" class="panel status" role="status" aria-live="polite">
       Idle web: every type stays fully bright while the full attack lattice glows in the background.
+    </div>
+
+    <div id="modeToggle" class="mode-toggle" role="group" aria-label="View mode">
+      <button class="mode-tab active" data-mode="defender" type="button">🛡️ Defender</button>
+      <button class="mode-tab" data-mode="attacker" type="button">⚔️ Attacker</button>
     </div>
 
     <button id="resetButton" class="reset" type="button" aria-label="Reset focus and selections" disabled>
