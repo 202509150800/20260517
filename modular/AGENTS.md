@@ -7,14 +7,15 @@ This file is for AI coding agents and automation tools.
 - This is a browser-only Pokemon GO type network visualizer.
 - It uses one canvas and a small HTML overlay.
 - No framework, package manager, bundler, or build step is used.
+- The app has two view modes: **Defender** (default) and **Attacker**, toggled via the `#modeToggle` UI.
 
 ## Important Files
 
-- `index.html`: entry page and script load order.
-- `css/styles.css`: visual styling and responsive layout.
+- `index.html`: entry page, script load order, and all UI HTML (legend, mode toggle, reset button).
+- `css/styles.css`: visual styling and responsive layout, including `.mode-toggle` / `.mode-tab` styles.
 - `js/data/type-chart.js`: source of truth for static type data.
 - `js/services/type-data-service.js`: current data access layer.
-- `js/app.js`: rendering, interactions, and animation state.
+- `js/app.js`: rendering, interactions, animation state, and mode logic.
 
 ## Editing Rules
 
@@ -26,15 +27,45 @@ This file is for AI coding agents and automation tools.
 
 ## Data Contract
 
-The app currently expects access to:
+The app consumes the following from `createTypeDataService().getConfig()`:
 
-- `typeOrder`
-- `typeData`
-- `pulseStyles`
-- `maxIdleLineAlpha`
-- `starDensity`
-- `typeChart`
-- `normalizeCombinedMultiplier(value)`
+- `typeOrder` — ordered array of 18 type strings
+- `typeData` — `{ [type]: { name, emoji, color } }`
+- `pulseStyles` — `{ [multiplier]: { label, endColor, speed, width, glow, alpha, mode } }`
+- `combinedValues` — snapped multiplier values: `[2.56, 1.6, 1, 0.625, 0.39, 0.24]`
+- `maxIdleLineAlpha` — baseline link opacity in idle state
+- `starDensity` — number of background stars
+
+And from the service instance:
+
+- `typeChart` — `{ [attacker][defender]: multiplier }`
+- `normalizeCombinedMultiplier(value)` — snaps a raw product to nearest `combinedValues` entry
+
+## App State
+
+Key fields in `state`:
+
+- `selectedTypes: string[]` — 0, 1, or 2 selected type strings
+- `hoverType: string | null` — currently hovered type
+- `viewMode: "defender" | "attacker"` — current mode tab selection
+
+## Mode System
+
+`getMode()` returns one of five mode kinds:
+
+| kind | trigger |
+|---|---|
+| `idle` | no selection, no hover |
+| `single` | 1 type selected/hovered in defender mode |
+| `dual` | 2 types selected in defender mode |
+| `attacker-single` | 1 type selected/hovered in attacker mode |
+| `attacker-dual` | 2 types selected in attacker mode |
+
+## UI Elements
+
+- `#modeToggle` — contains two `.mode-tab` buttons (`data-mode="defender"` and `data-mode="attacker"`)
+- `#resetButton` — disabled when no selections
+- `#status` — live status text panel
 
 ## Recommended Expansion Path
 

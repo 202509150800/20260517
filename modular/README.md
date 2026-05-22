@@ -33,6 +33,13 @@ modular/
 - Future database or API integration can be added in `js/services/` without rewriting the canvas engine.
 - New AI tools or developers can quickly find where to change data, visuals, and behavior.
 
+## Features
+
+- **Defender mode** (🛡️): hover or click a type to see every incoming attack and its multiplier. Click a second type to fuse a dual-type center defender with combined multipliers.
+- **Attacker mode** (⚔️): hover or click a type to see every type it hits super-effectively (×1.6 / ×2.56). Click a second type for dual-attacker coverage — shared targets show spiral Bezier lines, solo hits show straight lines.
+- Self-referential effectiveness (e.g. Dragon→Dragon ×1.6) shown as loop links on the ring node.
+- Toggle between modes using the **🛡️ Defender / ⚔️ Attacker** tabs at the bottom-right.
+
 ## Current Data Flow
 
 1. `index.html` loads the data file first.
