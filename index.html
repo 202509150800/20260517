@@ -328,6 +328,63 @@
       color: var(--accent);
     }
 
+    .defender-sub-toggle {
+      position: absolute;
+      right: 20px;
+      bottom: 128px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0;
+      padding: 0;
+      border-radius: 999px;
+      border: 1px solid rgba(142, 231, 255, 0.18);
+      background: rgba(14, 17, 24, 0.72);
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+      animation: panel-rise 1100ms 250ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+      overflow: hidden;
+      transition: opacity 200ms ease, transform 200ms ease;
+    }
+
+    .defender-sub-toggle.hidden {
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(6px);
+    }
+
+    .defender-tab {
+      pointer-events: auto;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.36rem;
+      padding: 0.55rem 0.85rem;
+      font: 700 0.74rem/1 "Segoe UI Variable Display", "Aptos", sans-serif;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.45);
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      transition: color 180ms ease, background 180ms ease;
+    }
+
+    .defender-tab:first-child {
+      border-right: 1px solid rgba(142, 231, 255, 0.15);
+    }
+
+    .defender-tab.active {
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.07);
+    }
+
+    .defender-tab.active[data-view="resist"] {
+      color: var(--accent);
+    }
+
+    .defender-tab.active[data-view="weak"] {
+      color: #ff8a90;
+    }
+
     .reset {
       position: absolute;
       right: 20px;
@@ -591,6 +648,11 @@
       <button class="mode-tab" data-mode="attacker" type="button">⚔️ Attacker</button>
     </div>
 
+    <div id="defenderToggle" class="defender-sub-toggle" role="group" aria-label="Defender sub-view">
+      <button class="defender-tab active" data-view="resist" type="button">🛡️ 抗性</button>
+      <button class="defender-tab" data-view="weak" type="button">⚔️ 弱點</button>
+    </div>
+
     <button id="resetButton" class="reset" type="button" aria-label="Reset focus and selections" disabled>
       <span class="reset-mark">X</span>
       Reset network
@@ -604,6 +666,8 @@
       const statusElement = document.getElementById("status");
       const resetButton = document.getElementById("resetButton");
       const modeTabs = document.querySelectorAll(".mode-tab");
+      const defenderToggle = document.getElementById("defenderToggle");
+      const defenderTabs = document.querySelectorAll(".defender-tab");
 
       const TYPE_ORDER = [
         "normal",
@@ -695,7 +759,8 @@
         lastPointerType: "mouse",
         stars: [],
         lastStatus: "",
-        viewMode: "defender"
+        viewMode: "defender",
+        defenderView: "resist"
       };
 
       const typeChart = buildTypeChart();
@@ -996,12 +1061,16 @@
             : "Idle web: every type stays fully bright while the full attack lattice glows in the background.";
         } else if (mode.kind === "single") {
           const label = TYPE_DATA[mode.defender].name;
+          const viewHint = state.defenderView === "resist"
+            ? "showing types that deal reduced damage (×0.625 or less)."
+            : "showing types that deal super-effective damage (×1.6 or more).";
           text = mode.locked
-            ? `${label} is locked as the defender. Nodes with no incoming interaction dim to 25%. Click one more type to build a dual defender.`
-            : `${label} is the live hover defender. Attackers with non-neutral incoming damage stay bright and pulse at speed based on multiplier.`;
+            ? `${label} locked as defender — ${viewHint} Click one more type to build a dual defender.`
+            : `${label} hover defender — ${viewHint}`;
         } else if (mode.kind === "dual") {
           const [first, second] = mode.defenders;
-          text = `${TYPE_DATA[first].name} + ${TYPE_DATA[second].name} now form the center defender. Straight shots use combined Pokemon GO multipliers and neutral attackers dim away.`;
+          const viewHint = state.defenderView === "resist" ? "Showing reduced-damage hits." : "Showing super-effective hits.";
+          text = `${TYPE_DATA[first].name} + ${TYPE_DATA[second].name} center defender — ${viewHint}`;
         } else if (mode.kind === "attacker-single") {
           const label = TYPE_DATA[mode.attacker].name;
           text = mode.locked
@@ -1018,6 +1087,10 @@
         }
 
         resetButton.disabled = state.selectedTypes.length === 0;
+
+        // Show/hide defender sub-toggle
+        const inDefenderMode = state.viewMode === "defender";
+        defenderToggle.classList.toggle("hidden", !inDefenderMode);
       }
 
       function drawBackground(time) {
@@ -1256,6 +1329,11 @@
             return;
           }
 
+          // Filter by defender sub-view
+          const isWeakness = multiplier > 1;
+          if (state.defenderView === "resist" && isWeakness) return;
+          if (state.defenderView === "weak" && !isWeakness) return;
+
           const attackerNode = getNode(attacker);
           const defenderNode = getNode(mode.defender);
 
@@ -1270,16 +1348,18 @@
       function drawDualFocus(mode, time) {
         TYPE_ORDER.forEach((type) => {
           const attackerNode = getNode(type);
+          const combined = normalizeCombinedMultiplier(typeChart[type][mode.defenders[0]] * typeChart[type][mode.defenders[1]]);
+          if (combined === 1) return;
+
+          // Filter by defender sub-view
+          const isWeakness = combined > 1;
+          if (state.defenderView === "resist" && isWeakness) return;
+          if (state.defenderView === "weak" && !isWeakness) return;
+
           if (mode.defenders.includes(type)) {
-            // Still draw if this defender type attacks the combined center non-neutrally
-            const combined = normalizeCombinedMultiplier(typeChart[type][mode.defenders[0]] * typeChart[type][mode.defenders[1]]);
-            if (combined !== 1) {
-              drawStraightLink(attackerNode, combined, time);
-            }
+            drawStraightLink(attackerNode, combined, time);
             return;
           }
-
-          const combined = normalizeCombinedMultiplier(typeChart[type][mode.defenders[0]] * typeChart[type][mode.defenders[1]]);
           drawStraightLink(attackerNode, combined, time);
         });
       }
@@ -1452,7 +1532,11 @@
           }
 
           const multiplier = typeChart[type][mode.defender];
-          if (multiplier !== 1) {
+          const isWeakness = multiplier > 1;
+          const isResist = multiplier < 1;
+          const isVisible = state.defenderView === "resist" ? isResist : isWeakness;
+
+          if (isVisible) {
             return {
               opacity: 1,
               glow: 0.42,
@@ -1486,7 +1570,10 @@
         }
 
         const combined = normalizeCombinedMultiplier(typeChart[type][mode.defenders[0]] * typeChart[type][mode.defenders[1]]);
-        if (combined !== 1) {
+        const isCombinedWeakness = combined > 1;
+        const isCombinedVisible = state.defenderView === "resist" ? combined < 1 : isCombinedWeakness;
+
+        if (isCombinedVisible) {
           return {
             opacity: 1,
             glow: 0.4,
@@ -1856,6 +1943,17 @@
           state.selectedTypes = [];
           state.hoverType = null;
           modeTabs.forEach((t) => t.classList.toggle("active", t.dataset.mode === newMode));
+          state.lastStatus = "";
+          updateStatus();
+        });
+      });
+
+      defenderTabs.forEach((tab) => {
+        tab.addEventListener("click", () => {
+          const newView = tab.dataset.view;
+          if (state.defenderView === newView) return;
+          state.defenderView = newView;
+          defenderTabs.forEach((t) => t.classList.toggle("active", t.dataset.view === newView));
           state.lastStatus = "";
           updateStatus();
         });
